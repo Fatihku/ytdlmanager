@@ -22,3 +22,13 @@ yt-dlp için native Mac GUI'si.
 - İndirme klasörü seçimi
 - İlerleme göstergesi
 - İndirme geçmişi
+
+## Git Kuralları
+- Her anlamlı değişiklikten sonra commit at
+- Commit mesajları Conventional Commits formatında olsun:
+  - feat: yeni özellik
+  - fix: hata düzeltme
+  - refactor: kod düzenleme
+  - chore: genel bakım
+- Her commit'ten sonra git push ile remote'a gönder
+- Commit atmadan önce git status ile değişiklikleri kontrol et
