@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct ContentView: View {
     @StateObject private var manager = DownloadManager()
@@ -17,13 +18,40 @@ struct ContentView: View {
     @State private var alertMessage = ""
 
     var body: some View {
-        HStack(alignment: .top, spacing: 20) {
-            leftPanel
-            HistoryView(history: manager.history)
-                .frame(minWidth: 380)
+        contentView
+            .onChange(of: manager.items) { oldItems, newItems in
+                if !newItems.isEmpty && newItems.allSatisfy({ $0.status == .success || $0.status == .failed }) {
+                    urls = [""]
+                }
+            }
+    }
+
+    private var contentView: some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            HStack(alignment: .top, spacing: 20) {
+                leftPanel
+                HistoryView(history: manager.history, onOpenFolder: { filePath in
+                    let fileURL = URL(fileURLWithPath: filePath)
+                    NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+                }, onRetry: { url in
+                    Task {
+                        await manager.startDownloads(urls: [url], format: selectedFormat, quality: selectedQuality)
+                    }
+                })
+                    .frame(minWidth: 380)
+            }
+            .padding(20)
+            .frame(minWidth: 1040, minHeight: 660)
+            
+            HStack {
+                Spacer()
+                Text("YTDL Video Download Manager by Fatih Kuyucuoglu  v\(getAppVersion())")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 8)
+            }
         }
-        .padding(20)
-        .frame(minWidth: 1040, minHeight: 660)
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button(action: { showSettings = true }) {
@@ -32,7 +60,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showSettings) {
-            SettingsView(downloadFolder: $manager.downloadFolder)
+            SettingsView(isPresented: $showSettings, downloadFolder: $manager.downloadFolder, ytDlpPath: $manager.ytDlpPath)
         }
         .alert("Download Issue", isPresented: $showAlert, actions: {
             Button("OK", role: .cancel) {}
@@ -40,12 +68,24 @@ struct ContentView: View {
             Text(alertMessage)
         })
     }
+    
+    private func getAppVersion() -> String {
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        return version
+    }
 
     private var leftPanel: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("YTDL Manager")
-                .font(.largeTitle)
-                .bold()
+            HStack(spacing: 12) {
+                Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                    .resizable()
+                    .frame(width: 40, height: 40)
+                    .cornerRadius(8)
+                Text("YTDL Video Download Manager")
+                    .font(.largeTitle)
+                    .fontWeight(.bold)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             GroupBox("Download Settings") {
                 VStack(alignment: .leading, spacing: 14) {
@@ -90,7 +130,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(activeUrls.isEmpty || manager.ytDlpPath == nil)
+                    .disabled(activeUrls.isEmpty)
                 }
                 .padding(12)
             }
@@ -124,6 +164,16 @@ struct ContentView: View {
                                         Label(item.status.label, systemImage: item.status.symbolName)
                                             .labelStyle(.iconOnly)
                                             .foregroundColor(item.status.tintColor)
+                                        
+                                        Button(action: {
+                                            manager.cancelDownload(itemID: item.id)
+                                        }) {
+                                            Image(systemName: "xmark.circle.fill")
+                                                .font(.caption)
+                                                .foregroundColor(.gray)
+                                        }
+                                        .buttonStyle(.borderless)
+                                        .help("Cancel download")
                                     }
 
                                     ProgressView(value: item.progress)
@@ -192,8 +242,8 @@ struct ContentView: View {
             return
         }
 
-        if manager.ytDlpPath == nil {
-            alertMessage = "yt-dlp not found. Install yt-dlp or make sure it is available at /usr/local/bin/yt-dlp."
+        if !FileManager.default.isExecutableFile(atPath: manager.ytDlpPath) {
+            alertMessage = "yt-dlp not found at \(manager.ytDlpPath). Please check the path in settings."
             showAlert = true
             return
         }
@@ -204,6 +254,3 @@ struct ContentView: View {
     }
 }
 
-#Preview {
-    ContentView()
-}

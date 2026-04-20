@@ -1,56 +1,35 @@
 import Foundation
+import Combine
 import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
 final class DownloadManager: ObservableObject {
-    @Published var downloadFolder: String {
-        didSet {
-            UserDefaults.standard.set(downloadFolder, forKey: Self.downloadFolderKey)
-        }
-    }
+    @Published var downloadFolder: String
 
     @Published private(set) var items: [DownloadItem] = []
     @Published private(set) var history: [DownloadItem] = []
-    @Published private(set) var ytDlpPath: String?
-    @Published private(set) var lastError: String?
+    @Published var ytDlpPath: String
 
     private static let downloadFolderKey = "YTDLManagerDownloadFolder"
+    private static let ytDlpPathKey = "YTDLManagerYtDlpPath"
 
     init() {
         let defaultFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
-            ?? FileManager.default.homeDirectoryForCurrentUser.appending(path: "Downloads").path
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Downloads").path
         self.downloadFolder = UserDefaults.standard.string(forKey: Self.downloadFolderKey) ?? defaultFolder
-        Task { await self.locateYtDlp() }
-    }
-
-    func locateYtDlp() async {
-        if FileManager.default.isExecutableFile(atPath: "/usr/local/bin/yt-dlp") {
-            ytDlpPath = "/usr/local/bin/yt-dlp"
-            return
-        }
-
-        do {
-            let output = try await runShellCommand("/usr/bin/which", arguments: ["yt-dlp"])
-            let path = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            ytDlpPath = path.isEmpty ? nil : path
-        } catch {
-            ytDlpPath = nil
-        }
+        let defaultYtDlpPath = "/opt/homebrew/bin/yt-dlp"
+        self.ytDlpPath = UserDefaults.standard.string(forKey: Self.ytDlpPathKey) ?? defaultYtDlpPath
     }
 
     func startDownloads(urls: [String], format: DownloadFormat, quality: DownloadQuality) async {
         guard !urls.isEmpty else { return }
-        guard ytDlpPath != nil else {
-            lastError = "yt-dlp could not be found. Install it or place it under /usr/local/bin/yt-dlp."
-            return
-        }
 
         for rawUrl in urls {
             let trimmedUrl = rawUrl.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmedUrl.isEmpty else { continue }
 
-            var item = DownloadItem(
+            let item = DownloadItem(
                 url: trimmedUrl,
                 format: format,
                 quality: quality,
@@ -61,7 +40,7 @@ final class DownloadManager: ObservableObject {
             )
 
             items.append(item)
-            await updateItem(item.id) { item in
+            updateItem(item.id) { item in
                 item.status = .downloading
                 item.message = "Starting"
                 item.progress = 0
@@ -70,7 +49,7 @@ final class DownloadManager: ObservableObject {
             do {
                 try await download(itemID: item.id)
             } catch {
-                await updateItem(item.id) { item in
+                updateItem(item.id) { item in
                     item.status = .failed
                     item.message = "Download failed"
                 }
@@ -80,9 +59,6 @@ final class DownloadManager: ObservableObject {
     }
 
     private func download(itemID: UUID) async throws {
-        guard let ytDlpPath else {
-            throw DownloadError.missingYtDlp
-        }
         guard let item = items.first(where: { $0.id == itemID }) else {
             throw DownloadError.itemNotFound
         }
@@ -108,18 +84,21 @@ final class DownloadManager: ObservableObject {
         let exitCode = try await runProcess(process)
         pipe.fileHandleForReading.closeFile()
 
-        try? await readTask.value
+        await readTask.value
 
         if exitCode == 0 {
-            await updateItem(itemID) { item in
+            updateItem(itemID) { item in
                 item.status = .success
                 item.progress = 1
                 item.message = "Download completed"
             }
         } else {
-            await updateItem(itemID) { item in
+            updateItem(itemID) { item in
                 item.status = .failed
                 item.message = "yt-dlp exited with code \(exitCode)"
+                if item.errorMessage.isEmpty {
+                    item.errorMessage = "Download failed with exit code \(exitCode)"
+                }
             }
         }
 
@@ -168,6 +147,12 @@ final class DownloadManager: ObservableObject {
         history.insert(item, at: 0)
     }
 
+    func cancelDownload(itemID: UUID) {
+        if let index = items.firstIndex(where: { $0.id == itemID }) {
+            items.remove(at: index)
+        }
+    }
+
     private func runShellCommand(_ command: String, arguments: [String]) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: command)
@@ -198,18 +183,48 @@ final class DownloadManager: ObservableObject {
     }
 
     private func readOutput(from handle: FileHandle, itemID: UUID) async {
-        for try await lineData in handle.bytes.lines {
-            guard let line = String(data: lineData, encoding: .utf8) else { continue }
-            let text = parseMessage(from: line)
-            if let progress = parseProgress(from: text) {
-                await updateItem(itemID) { item in
-                    item.progress = progress
-                    item.message = text
+        do {
+            let lines = handle.bytes.lines
+            for try await line in lines {
+                let text = parseMessage(from: line)
+                if line.contains("Destination:") {
+                    // Extract full file path and title from destination line
+                    // Format: "Destination: /full/path/to/filename.ext"
+                    if let destStart = line.range(of: "Destination:") {
+                        let pathStr = String(line[destStart.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                        updateItem(itemID) { item in
+                            item.filePath = pathStr
+                        }
+                        let components = pathStr.split(separator: "/")
+                        if let lastComponent = components.last {
+                            let parts = String(lastComponent).split(separator: ".")
+                            let title = parts.first.map(String.init) ?? String(lastComponent)
+                            updateItem(itemID) { item in
+                                item.title = title
+                            }
+                        }
+                    }
+                } else if line.contains("ERROR") || line.contains("error") {
+                    updateItem(itemID) { item in
+                        item.errorMessage = text
+                    }
                 }
-            } else {
-                await updateItem(itemID) { item in
-                    item.message = text
+                if let progress = parseProgress(from: text) {
+                    updateItem(itemID) { item in
+                        item.progress = progress
+                        item.message = text
+                    }
+                } else {
+                    updateItem(itemID) { item in
+                        item.message = text
+                    }
                 }
+            }
+        } catch {
+            updateItem(itemID) { item in
+                item.status = .failed
+                item.message = "Failed to read yt-dlp output: \(error.localizedDescription)"
+                item.errorMessage = error.localizedDescription
             }
         }
     }
@@ -217,7 +232,6 @@ final class DownloadManager: ObservableObject {
 
 extension DownloadManager {
     enum DownloadError: Error {
-        case missingYtDlp
         case itemNotFound
     }
 }

@@ -1,10 +1,13 @@
 import SwiftUI
+import AppKit
 
 struct HistoryView: View {
     let history: [DownloadItem]
+    let onOpenFolder: (String) -> Void
+    let onRetry: (String) -> Void
 
     var body: some View {
-        GroupBox("History") {
+        GroupBox("History (\(history.count))") {
             if history.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("No downloads yet.")
@@ -23,15 +26,60 @@ struct HistoryView: View {
                             .frame(width: 32)
 
                         VStack(alignment: .leading, spacing: 4) {
+                            if !item.title.isEmpty {
+                                Text(item.title)
+                                    .lineLimit(1)
+                                    .font(.headline)
+                            }
                             Text(item.url)
                                 .lineLimit(1)
-                                .font(.headline)
-                            Text(item.status.label)
                                 .font(.subheadline)
-                                .foregroundColor(item.status.tintColor)
-                            Text(item.message)
+                            Text(item.status.label)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(item.status.tintColor)
+                            if !item.errorMessage.isEmpty {
+                                Text(item.errorMessage)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            } else {
+                                Text(item.message)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        Spacer()
+
+                        if item.status == .success {
+                            Button(action: {
+                                onOpenFolder(item.filePath)
+                            }) {
+                                Image(systemName: "folder")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                            .onHover { isHovering in
+                                if isHovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
+                        } else if item.status == .failed {
+                            Button(action: {
+                                onRetry(item.url)
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                            .onHover { isHovering in
+                                if isHovering {
+                                    NSCursor.pointingHand.push()
+                                } else {
+                                    NSCursor.pop()
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 6)

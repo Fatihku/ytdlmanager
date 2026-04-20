@@ -1,34 +1,35 @@
 # YTDL Manager
 
-macOS uygulaması. SwiftUI ile yazılıyor.
-yt-dlp için native Mac GUI'si.
+A native macOS app built with SwiftUI.
+A native Mac GUI for yt-dlp.
 
-## Proje Yapısı
-- `YTDL Manager/ContentView.swift` — ana ekran
-- `YTDL Manager/YTDL_ManagerApp.swift` — uygulama giriş noktası
+## Project Structure
+- `YTDL Manager/ContentView.swift` — main screen
+- `YTDL Manager/YTDL_ManagerApp.swift` — app entry point
 
-## Kurallar
-- Swift ve SwiftUI kullan, UIKit kullanma
-- macOS 13+ hedef al
-- yt-dlp'yi Process() ile çalıştır
-- Ayarları UserDefaults'a kaydet
-- Türkçe yorum satırı yazma, İngilizce yaz
-- Her view ayrı dosyada olsun
+## Rules
+- Use Swift and SwiftUI, do not use UIKit
+- Target macOS 13+
+- Run yt-dlp using Process()
+- Save settings with UserDefaults
+- Use only English in the project
+- Write comments in English
+- Keep each view in a separate file
 
-## Özellikler
-- Çoklu URL ekleme
-- Format seçimi: MP4, MKV, MP3, AAC
-- Kalite seçimi: Best, 1080p, 720p, 480p
-- İndirme klasörü seçimi
-- İlerleme göstergesi
-- İndirme geçmişi
+## Features
+- Multi-URL input
+- Format selection: MP4, MKV, MP3, AAC
+- Quality selection: Best, 1080p, 720p, 480p
+- Download folder selection
+- Progress indicators
+- Download history
 
-## Git Kuralları
-- Her anlamlı değişiklikten sonra commit at
-- Commit mesajları Conventional Commits formatında olsun:
-  - feat: yeni özellik
-  - fix: hata düzeltme
-  - refactor: kod düzenleme
-  - chore: genel bakım
-- Her commit'ten sonra git push ile remote'a gönder
-- Commit atmadan önce git status ile değişiklikleri kontrol et
+## Git Rules
+- Commit after every meaningful change
+- Commit messages must follow Conventional Commits format:
+  - feat: new feature
+  - fix: bug fix
+  - refactor: code cleanup
+  - chore: maintenance
+- Push each commit to the remote
+- Check changes with git status before committing
