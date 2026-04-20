@@ -35,14 +35,7 @@ A native Mac GUI for yt-dlp.
 - Check changes with git status before committing
 
 ## Versioning & Release Notes
-- Every time a new version is built, update README.md with:
-  - Version number
-  - Release date
-  - List of changes made in this version (what was added, fixed, improved)
-- Keep a changelog section in README.md with all previous versions listed
-- Format:
-  ## Changelog
-  ### v1.0.1 - 2026-04-20
-  - Added: ...
-  - Fixed: ...
-  - Improved: ...
+- New feature added → increment minor version (1.1.0, 1.2.0)
+- Bug fix → increment patch version (1.0.1, 1.0.2)
+- Major redesign → increment major version (2.0.0)
+- Always update version in Xcode project settings AND README.md changelog when bumping version

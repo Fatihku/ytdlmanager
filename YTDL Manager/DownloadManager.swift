@@ -112,12 +112,9 @@ final class DownloadManager: ObservableObject {
         if item.format.isAudio {
             arguments += ["-x", "--audio-format", item.format.rawValue.lowercased(), "--audio-quality", item.quality.audioQualityOption()]
         } else {
-            arguments += ["-f", item.quality.videoFilter()]
-            if item.format == .mp4 {
-                arguments += ["--merge-output-format", "mp4"]
-            } else if item.format == .mkv {
-                arguments += ["--recode-video", "mkv"]
-            }
+            arguments += ["-f", "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"]
+            arguments += ["--merge-output-format", "mp4"]
+            arguments += ["--ffmpeg-location", "/usr/local/bin/ffmpeg"]
         }
 
         arguments.append(item.url)

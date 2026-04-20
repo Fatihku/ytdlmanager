@@ -61,6 +61,10 @@ which yt-dlp
 - About links for yt-dlp and YTDL Manager on GitHub
 
 ## Changelog
+### v1.1.0 - 2026-04-20
+- Fixed: ffmpeg path corrected to /usr/local/bin/ffmpeg
+- Fixed: MP4 merge now works correctly with audio
+
 ### v1.0.0 - 2026-04-20
 - Added: macOS SwiftUI download manager app with multi-URL input
 - Added: format and quality selection
