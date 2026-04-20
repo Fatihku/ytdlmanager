@@ -33,3 +33,16 @@ A native Mac GUI for yt-dlp.
   - chore: maintenance
 - Push each commit to the remote
 - Check changes with git status before committing
+
+## Versioning & Release Notes
+- Every time a new version is built, update README.md with:
+  - Version number
+  - Release date
+  - List of changes made in this version (what was added, fixed, improved)
+- Keep a changelog section in README.md with all previous versions listed
+- Format:
+  ## Changelog
+  ### v1.0.1 - 2026-04-20
+  - Added: ...
+  - Fixed: ...
+  - Improved: ...
