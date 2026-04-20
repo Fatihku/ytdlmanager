@@ -6,6 +6,16 @@ import UniformTypeIdentifiers
 @MainActor
 final class DownloadManager: ObservableObject {
     @Published var downloadFolder: String
+    @Published var removeEmojis: Bool {
+        didSet {
+            UserDefaults.standard.set(removeEmojis, forKey: Self.removeEmojisKey)
+        }
+    }
+    @Published var prefixDate: Bool {
+        didSet {
+            UserDefaults.standard.set(prefixDate, forKey: Self.prefixDateKey)
+        }
+    }
 
     @Published private(set) var items: [DownloadItem] = []
     @Published private(set) var history: [DownloadItem] = []
@@ -13,6 +23,8 @@ final class DownloadManager: ObservableObject {
 
     private static let downloadFolderKey = "YTDLManagerDownloadFolder"
     private static let ytDlpPathKey = "YTDLManagerYtDlpPath"
+    private static let removeEmojisKey = "YTDLManagerRemoveEmojis"
+    private static let prefixDateKey = "YTDLManagerPrefixDate"
 
     init() {
         let defaultFolder = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first?.path
@@ -20,6 +32,8 @@ final class DownloadManager: ObservableObject {
         self.downloadFolder = UserDefaults.standard.string(forKey: Self.downloadFolderKey) ?? defaultFolder
         let defaultYtDlpPath = "/opt/homebrew/bin/yt-dlp"
         self.ytDlpPath = UserDefaults.standard.string(forKey: Self.ytDlpPathKey) ?? defaultYtDlpPath
+        self.removeEmojis = UserDefaults.standard.bool(forKey: Self.removeEmojisKey)
+        self.prefixDate = UserDefaults.standard.bool(forKey: Self.prefixDateKey)
     }
 
     func startDownloads(urls: [String], format: DownloadFormat, quality: DownloadQuality) async {
@@ -82,15 +96,18 @@ final class DownloadManager: ObservableObject {
         }
 
         let exitCode = try await runProcess(process)
-        pipe.fileHandleForReading.closeFile()
 
         await readTask.value
+        pipe.fileHandleForReading.closeFile()
 
         if exitCode == 0 {
             updateItem(itemID) { item in
                 item.status = .success
                 item.progress = 1
                 item.message = "Download completed"
+            }
+            if removeEmojis || prefixDate {
+                await renameDownloadedFileIfNeeded(itemID: itemID)
             }
         } else {
             updateItem(itemID) { item in
@@ -117,6 +134,7 @@ final class DownloadManager: ObservableObject {
             arguments += ["--ffmpeg-location", "/usr/local/bin/ffmpeg"]
         }
 
+        arguments += ["--force-overwrites"]
         arguments.append(item.url)
         return arguments
     }
@@ -130,8 +148,149 @@ final class DownloadManager: ObservableObject {
         return Double(percentText).map { min(max($0 / 100, 0), 1) }
     }
 
+    private func renameDownloadedFileIfNeeded(itemID: UUID) async {
+        guard let item = items.first(where: { $0.id == itemID }), let filePath = item.filePath else {
+            return
+        }
+
+        let cleanedFilePath = cleanPath(filePath)
+        let currentURL = URL(fileURLWithPath: cleanedFilePath)
+        guard FileManager.default.fileExists(atPath: currentURL.path) else {
+            return
+        }
+
+        let originalName = currentURL.deletingPathExtension().lastPathComponent
+        var finalName = originalName
+
+        if removeEmojis {
+            finalName = stripEmojis(from: finalName).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        if prefixDate {
+            finalName = prefixDateString(to: finalName)
+        }
+
+        finalName = normalizeTitle(finalName)
+        if finalName.isEmpty {
+            finalName = "No Title"
+        }
+
+        let fileExtension = currentURL.pathExtension
+        let newFilename = fileExtension.isEmpty ? finalName : "\(finalName).\(fileExtension)"
+        let destinationURL = currentURL.deletingLastPathComponent().appendingPathComponent(newFilename)
+        let finalDestinationURL = uniqueURL(for: destinationURL)
+
+        guard finalDestinationURL.path != currentURL.path else {
+            updateItem(itemID) { item in
+                item.errorMessage = ""
+            }
+            return
+        }
+
+        do {
+            try FileManager.default.moveItem(at: currentURL, to: finalDestinationURL)
+            updateItem(itemID) { item in
+                item.filePath = finalDestinationURL.path
+                item.title = finalDestinationURL.deletingPathExtension().lastPathComponent
+                item.errorMessage = ""
+            }
+        } catch {
+            updateItem(itemID) { item in
+                item.errorMessage = "Failed to rename downloaded file: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    private func uniqueURL(for url: URL) -> URL {
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return url
+        }
+
+        let directory = url.deletingLastPathComponent()
+        let baseName = url.deletingPathExtension().lastPathComponent
+        let fileExtension = url.pathExtension
+
+        for index in 1...999 {
+            let suffix = String(format: "-%02d", index)
+            let candidateName = baseName + suffix
+            let candidateURL = directory.appendingPathComponent(fileExtension.isEmpty ? candidateName : "\(candidateName).\(fileExtension)")
+            if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+        }
+
+        return url
+    }
+
+    private func stripEmojis(from text: String) -> String {
+        let filteredScalars = text.unicodeScalars.filter { scalar in
+            !(scalar.properties.isEmojiPresentation || scalar.properties.isEmoji)
+        }
+        return String(String.UnicodeScalarView(filteredScalars))
+    }
+
+    private func cleanPath(_ path: String) -> String {
+        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("\"") && trimmed.hasSuffix("\"") {
+            return String(trimmed.dropFirst().dropLast())
+        }
+        if trimmed.hasPrefix("'") && trimmed.hasSuffix("'") {
+            return String(trimmed.dropFirst().dropLast())
+        }
+        return trimmed
+    }
+
+    private func updateTitle(from pathStr: String, itemID: UUID) {
+        let cleaned = cleanPath(pathStr)
+        let components = cleaned.split(separator: "/")
+        if let lastComponent = components.last {
+            let parts = String(lastComponent).split(separator: ".")
+            let rawTitle = parts.first.map(String.init) ?? String(lastComponent)
+            var title = rawTitle
+            if removeEmojis {
+                title = stripEmojis(from: title)
+            }
+            if prefixDate {
+                title = prefixDateString(to: title)
+            }
+            let finalTitle = normalizeTitle(title)
+            updateItem(itemID) { item in
+                item.title = finalTitle.isEmpty ? "No Title" : finalTitle
+            }
+        }
+    }
+
+    private func normalizeTitle(_ title: String) -> String {
+        title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
     private func parseMessage(from text: String) -> String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func prefixDateString(to title: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let datePrefix = formatter.string(from: Date())
+        return "\(datePrefix) \(title)"
+    }
+
+    private func extractDownloadedPath(from line: String) -> String? {
+        if line.contains("Merging formats into") {
+            if let mergerRange = line.range(of: "Merging formats into") {
+                return String(line[mergerRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        if line.contains("Destination:") {
+            if let destinationRange = line.range(of: "Destination:") {
+                return String(line[destinationRange.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+        return nil
     }
 
     private func updateItem(_ id: UUID, updater: (inout DownloadItem) -> Void) {
@@ -184,24 +343,13 @@ final class DownloadManager: ObservableObject {
             let lines = handle.bytes.lines
             for try await line in lines {
                 let text = parseMessage(from: line)
-                if line.contains("Destination:") {
-                    // Extract full file path and title from destination line
-                    // Format: "Destination: /full/path/to/filename.ext"
-                    if let destStart = line.range(of: "Destination:") {
-                        let pathStr = String(line[destStart.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                        updateItem(itemID) { item in
-                            item.filePath = pathStr
-                        }
-                        let components = pathStr.split(separator: "/")
-                        if let lastComponent = components.last {
-                            let parts = String(lastComponent).split(separator: ".")
-                            let title = parts.first.map(String.init) ?? String(lastComponent)
-                            updateItem(itemID) { item in
-                                item.title = title
-                            }
-                        }
+                if let pathStr = extractDownloadedPath(from: line) {
+                    let cleanedPath = cleanPath(pathStr)
+                    updateItem(itemID) { item in
+                        item.filePath = cleanedPath
                     }
-                } else if line.contains("ERROR") || line.contains("error") {
+                    updateTitle(from: cleanedPath, itemID: itemID)
+                } else if text.lowercased().contains("error:") || text.lowercased().contains("[error]") {
                     updateItem(itemID) { item in
                         item.errorMessage = text
                     }

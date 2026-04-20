@@ -96,7 +96,7 @@ struct DownloadItem: Identifiable, Equatable {
     var message: String = "Waiting"
     var title: String = ""
     var errorMessage: String = ""
-    var filePath: String = ""
+    var filePath: String?
 
     var formattedUrl: String {
         url.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -31,6 +31,7 @@ struct ContentView: View {
             HStack(alignment: .top, spacing: 20) {
                 leftPanel
                 HistoryView(history: manager.history, onOpenFolder: { filePath in
+                    guard let filePath = filePath else { return }
                     let fileURL = URL(fileURLWithPath: filePath)
                     NSWorkspace.shared.activateFileViewerSelecting([fileURL])
                 }, onRetry: { url in
@@ -123,6 +124,12 @@ struct ContentView: View {
                         }
                         .buttonStyle(.bordered)
                     }
+
+                    Toggle("Remove emojis from filename", isOn: $manager.removeEmojis)
+                        .toggleStyle(.switch)
+
+                    Toggle("Prefix filename with current date", isOn: $manager.prefixDate)
+                        .toggleStyle(.switch)
 
                     Button(action: downloadAction) {
                         Label("Download", systemImage: "arrow.down.circle")

@@ -61,6 +61,11 @@ which yt-dlp
 - About links for yt-dlp and YTDL Manager on GitHub
 
 ## Changelog
+### v1.2.0 - 2026-04-20
+- Fixed: filename rename now appends numeric suffix when a duplicate exists
+- Fixed: history list clipping and renamed item visibility
+- Fixed: emoji and date-prefix options behave correctly during rename
+
 ### v1.1.0 - 2026-04-20
 - Fixed: ffmpeg path corrected to /usr/local/bin/ffmpeg
 - Fixed: MP4 merge now works correctly with audio
