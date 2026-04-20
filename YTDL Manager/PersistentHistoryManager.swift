@@ -51,6 +51,7 @@ struct DownloadHistoryEntry: Identifiable, Codable, Equatable {
     let url: String
     let title: String
     let accountName: String?
+    let accountUsername: String?
     let platform: DownloadPlatform
     let downloadDate: Date
     let format: DownloadFormat

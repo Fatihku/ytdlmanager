@@ -98,6 +98,8 @@ struct DownloadItem: Identifiable, Equatable {
     var errorMessage: String = ""
     var filePath: String?
     var accountName: String = ""
+    var accountUsername: String = ""
+    var sequencePrefix: String = ""
 
     var formattedUrl: String {
         url.trimmingCharacters(in: .whitespacesAndNewlines)

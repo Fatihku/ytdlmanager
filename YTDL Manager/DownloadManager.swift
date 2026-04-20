@@ -86,9 +86,18 @@ final class DownloadManager: ObservableObject {
             item.progress = 0
         }
 
-        let uploader = await fetchUploader(for: item.url)
+        let (uploaderName, uploaderUsername) = await fetchUploaderInfo(for: item.url)
         updateItem(itemID) { item in
-            item.accountName = uploader
+            item.accountName = uploaderName
+            item.accountUsername = uploaderUsername ?? ""
+        }
+
+        if prefixDate {
+            let seq = nextDailySequence()
+            let prefix = dailySequencePrefix(sequence: seq)
+            updateItem(itemID) { item in
+                item.sequencePrefix = prefix
+            }
         }
 
         let process = Process()
@@ -175,7 +184,7 @@ final class DownloadManager: ObservableObject {
         }
 
         if prefixDate {
-            finalName = prefixDateString(to: finalName)
+            finalName = prefixDateString(to: finalName, prefix: item.sequencePrefix.isEmpty ? nil : item.sequencePrefix)
         }
 
         finalName = normalizeTitle(finalName)
@@ -258,8 +267,9 @@ final class DownloadManager: ObservableObject {
             if removeEmojis {
                 title = stripEmojis(from: title)
             }
+            let seqPrefix = items.first(where: { $0.id == itemID })?.sequencePrefix
             if prefixDate {
-                title = prefixDateString(to: title)
+                title = prefixDateString(to: title, prefix: seqPrefix)
             }
             let finalTitle = normalizeTitle(title)
             updateItem(itemID) { item in
@@ -280,11 +290,33 @@ final class DownloadManager: ObservableObject {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func prefixDateString(to title: String) -> String {
+    private func prefixDateString(to title: String, prefix: String? = nil) -> String {
+        let datePrefix: String
+        if let prefix = prefix, !prefix.isEmpty {
+            datePrefix = prefix
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            datePrefix = formatter.string(from: Date())
+        }
+        return "\(datePrefix) \(title)"
+    }
+
+    private func nextDailySequence() -> Int {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        let datePrefix = formatter.string(from: Date())
-        return "\(datePrefix) \(title)"
+        let today = formatter.string(from: Date())
+        let key = "YTDLManager_DailyCounter_\(today)"
+        let next = UserDefaults.standard.integer(forKey: key) + 1
+        UserDefaults.standard.set(next, forKey: key)
+        return next
+    }
+
+    private func dailySequencePrefix(sequence: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let today = formatter.string(from: Date())
+        return String(format: "%@-%02d", today, sequence)
     }
 
     private func extractDownloadedPath(from line: String) -> String? {
@@ -315,6 +347,7 @@ final class DownloadManager: ObservableObject {
             url: item.url,
             title: item.title.isEmpty ? item.url : item.title,
             accountName: item.accountName.isEmpty ? nil : item.accountName,
+            accountUsername: item.accountUsername.isEmpty ? nil : item.accountUsername,
             platform: platform(for: item.url),
             downloadDate: Date(),
             format: item.format,
@@ -366,16 +399,35 @@ final class DownloadManager: ObservableObject {
         }
     }
 
-    private func fetchUploader(for url: String) async -> String {
+    private func fetchUploaderInfo(for url: String) async -> (name: String, username: String?) {
         do {
-            let output = try await runShellCommand(ytDlpPath, arguments: ["--no-download", "--print", "%(uploader)s", url])
-            let name = output.trimmingCharacters(in: .whitespacesAndNewlines)
-            if name.isEmpty || name == "NA" || name.lowercased() == "none" {
-                return "Unknown"
+            let output = try await runShellCommand(
+                ytDlpPath,
+                arguments: ["--no-download", "--print", "%(uploader)s", "--print", "%(uploader_id)s", url]
+            )
+            let lines = output.components(separatedBy: "\n")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+            let rawName = lines.first ?? ""
+            let name = (rawName.isEmpty || rawName == "NA" || rawName.lowercased() == "none")
+                ? "Unknown" : rawName
+
+            let rawId = lines.dropFirst().first ?? ""
+            let username: String?
+            if rawId.isEmpty || rawId == "NA" || rawId.lowercased() == "none" {
+                username = nil
+            } else if rawId.hasPrefix("UC") && rawId.count > 20 {
+                // YouTube internal channel ID — not a readable handle
+                username = nil
+            } else if rawId.hasPrefix("@") {
+                username = rawId
+            } else {
+                username = "@\(rawId)"
             }
-            return name
+
+            return (name, username)
         } catch {
-            return "Unknown"
+            return ("Unknown", nil)
         }
     }
 

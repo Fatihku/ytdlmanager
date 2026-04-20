@@ -6,6 +6,36 @@ private let historyDateFormatter: DateFormatter = {
     return f
 }()
 
+private struct CopyButton: View {
+    let text: String
+    @State private var copied = false
+    @State private var isHovered = false
+
+    var body: some View {
+        Button {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.caption2)
+                .foregroundColor(copied ? .green : isHovered ? .primary : .secondary)
+                .padding(4)
+                .background(isHovered ? Color(NSColor.controlBackgroundColor) : Color.clear)
+                .cornerRadius(4)
+        }
+        .buttonStyle(.borderless)
+        .help(copied ? "Copied!" : "Copy")
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+        }
+    }
+}
+
 private struct PlatformBadge: View {
     let platform: DownloadPlatform
 
@@ -22,6 +52,7 @@ private struct PlatformBadge: View {
 
 struct PersistentHistoryTabView: View {
     @ObservedObject var manager: DownloadManager
+    var onAddToList: ((String) -> Void)? = nil
     @State private var searchText = ""
     @State private var selectedPlatform: DownloadPlatform? = nil
     @State private var filterByDate = false
@@ -88,19 +119,35 @@ struct PersistentHistoryTabView: View {
                                         .frame(width: 30, alignment: .leading)
 
                                     VStack(alignment: .leading, spacing: 4) {
-                                        Text(entry.title)
-                                            .font(.headline)
-                                            .lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            Text(entry.title)
+                                                .font(.headline)
+                                                .lineLimit(1)
+                                            CopyButton(text: entry.title)
+                                        }
 
-                                        Text(entry.accountName ?? "Unknown")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            let channelDisplay: String = {
+                                                let name = entry.accountName ?? "Unknown"
+                                                if let handle = entry.accountUsername {
+                                                    return "\(name) • \(handle)"
+                                                }
+                                                return name
+                                            }()
+                                            Text(channelDisplay)
+                                                .font(.subheadline)
+                                                .foregroundColor(.secondary)
+                                                .lineLimit(1)
+                                            CopyButton(text: channelDisplay)
+                                        }
 
-                                        Text(entry.url)
-                                            .font(.caption)
-                                            .foregroundColor(Color(NSColor.tertiaryLabelColor))
-                                            .lineLimit(1)
+                                        HStack(spacing: 6) {
+                                            Text(entry.url)
+                                                .font(.caption)
+                                                .foregroundColor(Color(NSColor.tertiaryLabelColor))
+                                                .lineLimit(1)
+                                            CopyButton(text: entry.url)
+                                        }
                                     }
 
                                     Spacer()
@@ -140,6 +187,19 @@ struct PersistentHistoryTabView: View {
                                     }
                                     Spacer()
                                     Button {
+                                        onAddToList?(entry.url)
+                                    } label: {
+                                        Label("Add to List", systemImage: "plus.circle")
+                                            .font(.caption)
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .controlSize(.small)
+                                    .help("Add URL to download list")
+                                    .onHover { hovering in
+                                        if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                                    }
+
+                                    Button {
                                         manager.redownload(entry: entry)
                                     } label: {
                                         Label("Redownload", systemImage: "arrow.clockwise")
@@ -148,6 +208,9 @@ struct PersistentHistoryTabView: View {
                                     .buttonStyle(.bordered)
                                     .controlSize(.small)
                                     .help("Redownload with same format and quality")
+                                    .onHover { hovering in
+                                        if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                                    }
                                 }
                             }
                             .padding(16)

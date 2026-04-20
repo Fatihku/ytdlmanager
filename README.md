@@ -6,7 +6,7 @@
 
 **GitHub:** https://github.com/Fatihku/ytdlmanager
 
-**Version:** 1.3.0
+**Version:** 1.3.1
 
 **Release Date:** 2026-04-20
 
@@ -61,6 +61,13 @@ which yt-dlp
 - About links for yt-dlp and YTDL Manager on GitHub
 
 ## Changelog
+### v1.3.1 - 20.04.2026
+- Added: copy buttons (doc.on.doc) next to title, channel, and URL in history rows
+- Added: channel @handle display as "Name • @handle" in history rows
+- Added: daily sequence number in filename prefix (e.g. 2026-04-20-01, increments per day)
+- Added: "Add to List" button on history rows to send URL back to the Download tab
+- Improved: hover effects on all history row buttons (pointing hand cursor, copy button highlight)
+
 ### v1.3.0 - 20.04.2026
 - Added: uploader/channel name captured from yt-dlp and displayed in history rows
 - Added: platform badge (YT/TK/IG/TW/RD/?) with platform color next to each history entry

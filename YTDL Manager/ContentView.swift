@@ -16,18 +16,30 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var showChannelAlert = false
+    @State private var pendingDownloadURLs: [String] = []
+    @State private var selectedTab = 0
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             downloadTab
                 .tabItem {
                     Label("Download", systemImage: "square.and.arrow.down")
                 }
+                .tag(0)
 
-            PersistentHistoryTabView(manager: manager)
+            PersistentHistoryTabView(manager: manager, onAddToList: { url in
+                if urls.last?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true {
+                    urls[urls.count - 1] = url
+                } else {
+                    urls.append(url)
+                }
+                selectedTab = 0
+            })
                 .tabItem {
                     Label("History", systemImage: "clock.arrow.circlepath")
                 }
+                .tag(1)
         }
         .onChange(of: manager.items) { oldItems, newItems in
             if !newItems.isEmpty && newItems.allSatisfy({ $0.status == .success || $0.status == .failed }) {
@@ -77,6 +89,18 @@ struct ContentView: View {
             Button("OK", role: .cancel) {}
         }, message: {
             Text(alertMessage)
+        })
+        .alert("Channel URL Detected", isPresented: $showChannelAlert, actions: {
+            Button("Cancel", role: .cancel) {
+                pendingDownloadURLs = []
+            }
+            Button("Continue", role: .destructive) {
+                let urls = pendingDownloadURLs
+                pendingDownloadURLs = []
+                startDownloadTask(urls: urls)
+            }
+        }, message: {
+            Text("This appears to be a channel URL. Downloading a channel will download ALL videos. Are you sure?")
         })
     }
     
@@ -252,6 +276,11 @@ struct ContentView: View {
         urls.append("")
     }
 
+    private func isChannelURL(_ url: String) -> Bool {
+        let lower = url.lowercased()
+        return lower.contains("/@") || lower.contains("/channel/") || lower.contains("/user/") || lower.contains("/c/")
+    }
+
     private func downloadAction() {
         guard !activeUrls.isEmpty else {
             alertMessage = "Please add at least one valid URL before starting the download."
@@ -265,8 +294,19 @@ struct ContentView: View {
             return
         }
 
+        let channelURLs = activeUrls.filter { isChannelURL($0) }
+        if !channelURLs.isEmpty {
+            pendingDownloadURLs = activeUrls
+            showChannelAlert = true
+            return
+        }
+
+        startDownloadTask(urls: activeUrls)
+    }
+
+    private func startDownloadTask(urls: [String]) {
         Task {
-            await manager.startDownloads(urls: activeUrls, format: selectedFormat, quality: selectedQuality)
+            await manager.startDownloads(urls: urls, format: selectedFormat, quality: selectedQuality)
         }
     }
 }
