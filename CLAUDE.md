@@ -33,6 +33,12 @@ A native Mac GUI for yt-dlp.
   - chore: maintenance
 - Push each commit to the remote
 - Check changes with git status before committing
+- Never add Co-Authored-By lines to commits
+- Always commit as Fatih Kuyucuoglu only
+
+## Git Config
+- Always set before committing: `git config user.name "Fatih Kuyucuoglu"` and `git config user.email "fatihku@gmail.com"`
+- Never use Claude's git identity
 
 ## Versioning & Release Notes
 - New feature added → increment minor version (1.1.0, 1.2.0)
