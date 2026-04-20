@@ -35,7 +35,7 @@ enum DownloadStatus: String, Codable {
     }
 }
 
-enum DownloadFormat: String, CaseIterable, Identifiable {
+enum DownloadFormat: String, CaseIterable, Identifiable, Codable {
     case mp4 = "MP4"
     case mkv = "MKV"
     case mp3 = "MP3"
@@ -50,7 +50,7 @@ enum DownloadFormat: String, CaseIterable, Identifiable {
     }
 }
 
-enum DownloadQuality: String, CaseIterable, Identifiable {
+enum DownloadQuality: String, CaseIterable, Identifiable, Codable {
     case best = "Best"
     case p1080 = "1080p"
     case p720 = "720p"
@@ -97,6 +97,7 @@ struct DownloadItem: Identifiable, Equatable {
     var title: String = ""
     var errorMessage: String = ""
     var filePath: String?
+    var accountName: String = ""
 
     var formattedUrl: String {
         url.trimmingCharacters(in: .whitespacesAndNewlines)

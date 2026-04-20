@@ -18,15 +18,25 @@ struct ContentView: View {
     @State private var alertMessage = ""
 
     var body: some View {
-        contentView
-            .onChange(of: manager.items) { oldItems, newItems in
-                if !newItems.isEmpty && newItems.allSatisfy({ $0.status == .success || $0.status == .failed }) {
-                    urls = [""]
+        TabView {
+            downloadTab
+                .tabItem {
+                    Label("Download", systemImage: "square.and.arrow.down")
                 }
+
+            PersistentHistoryTabView(manager: manager)
+                .tabItem {
+                    Label("History", systemImage: "clock.arrow.circlepath")
+                }
+        }
+        .onChange(of: manager.items) { oldItems, newItems in
+            if !newItems.isEmpty && newItems.allSatisfy({ $0.status == .success || $0.status == .failed }) {
+                urls = [""]
             }
+        }
     }
 
-    private var contentView: some View {
+    private var downloadTab: some View {
         VStack(alignment: .trailing, spacing: 0) {
             HStack(alignment: .top, spacing: 20) {
                 leftPanel

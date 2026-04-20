@@ -6,7 +6,7 @@
 
 **GitHub:** https://github.com/Fatihku/ytdlmanager
 
-**Version:** 1.2.0
+**Version:** 1.3.0
 
 **Release Date:** 2026-04-20
 
@@ -61,7 +61,13 @@ which yt-dlp
 - About links for yt-dlp and YTDL Manager on GitHub
 
 ## Changelog
-### v1.2.0 - 2026-04-20
+### v1.3.0 - 20.04.2026
+- Added: uploader/channel name captured from yt-dlp and displayed in history rows
+- Added: platform badge (YT/TK/IG/TW/RD/?) with platform color next to each history entry
+- Added: date format changed to DD.MM.YYYY across the History tab
+- Added: Redownload button on each history row to re-run with the same format and quality
+
+### v1.2.0 - 20.04.2026
 - Fixed: filename rename now appends numeric suffix when a duplicate exists
 - Fixed: history list clipping and renamed item visibility
 - Fixed: emoji and date-prefix options behave correctly during rename

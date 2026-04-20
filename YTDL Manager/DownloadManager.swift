@@ -19,8 +19,10 @@ final class DownloadManager: ObservableObject {
 
     @Published private(set) var items: [DownloadItem] = []
     @Published private(set) var history: [DownloadItem] = []
+    @Published private(set) var persistentHistory: [DownloadHistoryEntry] = []
     @Published var ytDlpPath: String
 
+    private let persistentHistoryManager = PersistentHistoryManager()
     private static let downloadFolderKey = "YTDLManagerDownloadFolder"
     private static let ytDlpPathKey = "YTDLManagerYtDlpPath"
     private static let removeEmojisKey = "YTDLManagerRemoveEmojis"
@@ -34,6 +36,7 @@ final class DownloadManager: ObservableObject {
         self.ytDlpPath = UserDefaults.standard.string(forKey: Self.ytDlpPathKey) ?? defaultYtDlpPath
         self.removeEmojis = UserDefaults.standard.bool(forKey: Self.removeEmojisKey)
         self.prefixDate = UserDefaults.standard.bool(forKey: Self.prefixDateKey)
+        self.persistentHistory = persistentHistoryManager.entries
     }
 
     func startDownloads(urls: [String], format: DownloadFormat, quality: DownloadQuality) async {
@@ -81,6 +84,11 @@ final class DownloadManager: ObservableObject {
             item.status = .downloading
             item.message = "Preparing download..."
             item.progress = 0
+        }
+
+        let uploader = await fetchUploader(for: item.url)
+        updateItem(itemID) { item in
+            item.accountName = uploader
         }
 
         let process = Process()
@@ -301,11 +309,73 @@ final class DownloadManager: ObservableObject {
     private func appendHistory(for itemID: UUID) async {
         guard let item = items.first(where: { $0.id == itemID }) else { return }
         history.insert(item, at: 0)
+
+        let historyEntry = DownloadHistoryEntry(
+            id: UUID(),
+            url: item.url,
+            title: item.title.isEmpty ? item.url : item.title,
+            accountName: item.accountName.isEmpty ? nil : item.accountName,
+            platform: platform(for: item.url),
+            downloadDate: Date(),
+            format: item.format,
+            quality: item.quality,
+            filePath: item.filePath,
+            status: item.status,
+            errorMessage: item.errorMessage.isEmpty ? nil : item.errorMessage
+        )
+
+        persistentHistoryManager.add(historyEntry)
+        persistentHistory = persistentHistoryManager.entries
+    }
+
+    func redownload(entry: DownloadHistoryEntry) {
+        Task {
+            await startDownloads(urls: [entry.url], format: entry.format, quality: entry.quality)
+        }
+    }
+
+    func clearPersistentHistory() {
+        persistentHistoryManager.clear()
+        persistentHistory = persistentHistoryManager.entries
+    }
+
+    private func platform(for urlString: String) -> DownloadPlatform {
+        let lowercased = urlString.lowercased()
+
+        if lowercased.contains("youtube.com") || lowercased.contains("youtu.be") {
+            return .youtube
+        }
+        if lowercased.contains("tiktok.com") {
+            return .tiktok
+        }
+        if lowercased.contains("instagram.com") {
+            return .instagram
+        }
+        if lowercased.contains("twitter.com") || lowercased.contains("x.com") {
+            return .twitter
+        }
+        if lowercased.contains("reddit.com") {
+            return .reddit
+        }
+        return .unknown
     }
 
     func cancelDownload(itemID: UUID) {
         if let index = items.firstIndex(where: { $0.id == itemID }) {
             items.remove(at: index)
+        }
+    }
+
+    private func fetchUploader(for url: String) async -> String {
+        do {
+            let output = try await runShellCommand(ytDlpPath, arguments: ["--no-download", "--print", "%(uploader)s", url])
+            let name = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if name.isEmpty || name == "NA" || name.lowercased() == "none" {
+                return "Unknown"
+            }
+            return name
+        } catch {
+            return "Unknown"
         }
     }
 
